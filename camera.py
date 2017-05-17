@@ -3,8 +3,8 @@ import picamera
 
 class HyperLapseCam:
 
-	def startcapture(self, time, turns):
-		time = float(time)
+	def startcapture(self, timer, turns):
+		timer = float(time)
 		turns = int(turns)
 		with picamera.PiCamera() as c:
 #			c.resolution = (2592,1944) 해상도 조절
@@ -12,7 +12,7 @@ class HyperLapseCam:
 			c.exposure_compensation=2
 			for i in range(turns):
 				c.capture('image'+str(i)+'.jpg')
-				time.sleep(time)
+				time.sleep(timer)
 				i = i + 1
 #			c.stop_preview() preview 끝
 
