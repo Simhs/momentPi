@@ -5,4 +5,4 @@
 > http://engineer2you.blogspot.kr/2016/10/rasbperry-pi-ffmpeg-install-and-stream.html
 
 ### 이미지를 mp4로 변환시키는 명령어
-> ffmpeg -y -f image2 -i /home/pi/screenshot/image%d.jpg -preset fast /home/pi/screenshot/testlapse.mp4
+> `ffmpeg -y -f image2 -i /home/pi/screenshot/image%d.jpg -preset fast /home/pi/screenshot/testlapse.mp4`
