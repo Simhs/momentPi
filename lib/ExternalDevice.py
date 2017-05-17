@@ -15,4 +15,6 @@ class HyperLapseCam:
 			for i in range(turns):
 				c.capture('image'+str(i)+'.jpg')
 				time.sleep(timer)
-				i = i + 1
+	def test(self):
+		pass
+	
