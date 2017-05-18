@@ -20,6 +20,7 @@ class HyperLapseCam:
 				c.capture('image'+str(i)+'.jpg')
 				time.sleep(timer)
 				
+	#촬영시간 입력하면 30초 영상분량을 찍어주는 메소드
 	def test(self):
 		timer = self.totaltime*3600/750
 		with picamera.PiCamera() as c:
