@@ -7,21 +7,25 @@ class Dial():
         def __init__(self):
                 GPIO.setmode(GPIO.BCM)
                 # SPI port on the ADC to the Cobbler
-                self.SPICLK = 18
-                self.SPIMISO = 23
-                self.SPIMOSI = 24
-                self.SPICS = 25
+                self.SPICLK = 12
+                self.SPIMISO = 16
+                self.SPIMOSI = 20
+                self.SPICS = 21
+                self.POWER = 26
 
                 # set up the SPI interface pins
+                GPIO.setup(self.POWER, GPIO.OUT)
                 GPIO.setup(self.SPIMOSI, GPIO.OUT)
                 GPIO.setup(self.SPIMISO, GPIO.IN)
                 GPIO.setup(self.SPICLK, GPIO.OUT)
                 GPIO.setup(self.SPICS, GPIO.OUT)
+                GPIO.output(self.POWER, True)
 
                 # 10k trim pot connected to adc #0
                 self.potentiometer_adc = 0;
                 
         def readadc(self, adcnum, clockpin, mosipin, misopin, cspin):
+                
                 if ((adcnum > 7) or (adcnum < 0)):
                         return -1
                 GPIO.output(cspin, True)
@@ -60,7 +64,7 @@ class Dial():
                 if(trim_pot != 0):
                         set_vel = int(round(trim_pot*705/1023))+15
                 else:
-                        set_vel = 0      
+                        set_vel = 0
                 return set_vel
 while True:
         dial = Dial()
