@@ -13,7 +13,7 @@ class Mail:
 	def __init__(self):
 		self.gmail_username = "Moment Pi"
 		self.gmail_user = "tlsghdwo90@gmail.com"
-		self.gmail_pwd = "cjfrnjs501"
+		self.gmail_pwd = "*******"
 
 	def send_gmail(self, to, subject, text, attach):
 		msg=MIMEMultipart('alternative')
