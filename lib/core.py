@@ -65,6 +65,7 @@ class Machine:
         self.printingState = PrintingState(self)
         self.recodingState = RecodingState(self)
         self.loadingState = LoadingState(self)
+        self.emailSendState = EmailSendState(self)
         self.galleryState = GalleryState(self)
         self.exitState = ExitState(self)
         self.state = StreamingState(self)
@@ -81,6 +82,8 @@ class Machine:
             self.setState(self.getRecodingState())
         elif cmd=="LoadingState":
             self.setState(self.getLoadingState())
+        elif cmd=="EmailSendState":
+            self.setState(self.getEmailSendState())
         elif cmd=="GalleryState":
             self.setState(self.getGalleryState())
         elif cmd=="ExitState":
@@ -107,6 +110,9 @@ class Machine:
 
     def getLoadingState(self):
         return self.loadingState
+
+    def getEmailSendState(self):
+        return self.emailSendState
 
     def getGalleryState(self):
         return self.galleryState
@@ -244,6 +250,7 @@ class RecodingState(State):
         pygame.display.flip()
         self.saveImg()
         self.setCommand("LoadingState")
+        
 class LoadingState(State):
     def __init__(self,Machine):
         self.machine = Machine
@@ -260,7 +267,7 @@ class LoadingState(State):
         self.cmd = cmd
 
     def convertToMP4(self):
-        time.sleep(1)
+        time.sleep(20)
         self.convertOver = True
 
     def sendEmail(self):
@@ -268,7 +275,7 @@ class LoadingState(State):
 
     def animation(self):
         angle = -20
-        spd = 1
+        spd = 2
         while True:
             if not self.convertOver:
                 clock = pygame.time.Clock()
@@ -288,13 +295,76 @@ class LoadingState(State):
                 time.sleep(0.01)
                 if angle < -160:
                     angle -= spd
-                    spd -= 0.09
+                    spd -= 0.19
                 else:
                     angle -= spd
-                    spd += 0.1
+                    spd += 0.2
                 if angle < -380:
                     angle = -20
-                    spd = 1
+                    spd = 3
+            else:
+                break
+
+
+    def displayFlip(self):
+        self.setCommand("StreamingState")
+        self.thread = Thread(target=self.animation, )
+        self.thread.start()
+        self.convertToMP4()
+        self.thread.join()
+        self.convertOver = False
+
+class EmailSendState(State):
+    def __init__(self,Machine):
+        self.machine = Machine
+        self.barValue = None
+        self.cmd = None
+        self.convertOver = False
+
+    def getCommand(self):
+        command = self.cmd
+        self.setCommand(None)
+        return command
+
+    def setCommand(self,cmd):
+        self.cmd = cmd
+
+    def convertToMP4(self):
+        time.sleep(20)
+        self.convertOver = True
+
+    def sendEmail(self):
+        pass
+
+    def animation(self):
+        angle = -20
+        spd = 2
+        while True:
+            if not self.convertOver:
+                clock = pygame.time.Clock()
+                self.machine.screen.fill((0, 0, 0))
+                pygame.draw.rect(self.machine.screen, (200, 200, 200), [0, 0, self.machine.w_size, self.machine.h_size])
+                pygame.font.init()
+                text = "loading..."
+                font = pygame.font.Font(None, 50)
+                imgText = font.render(text, True, (255, 0, 0))
+                rect = imgText.get_rect()
+                self.machine.screen.blit(imgText, rect)
+                image = pygame.transform.rotate(self.machine.loadingIcon, angle)
+                rect = image.get_rect()
+                rect.center = self.machine.loading_rect.center
+                self.machine.screen.blit(image,rect)
+                pygame.display.flip()
+                time.sleep(0.01)
+                if angle < -160:
+                    angle -= spd
+                    spd -= 0.19
+                else:
+                    angle -= spd
+                    spd += 0.2
+                if angle < -380:
+                    angle = -20
+                    spd = 3
             else:
                 break
 
@@ -308,59 +378,153 @@ class LoadingState(State):
         self.convertOver = False
 
 
-
+import os
+import cv2
 
 class GalleryState(State):
     def __init__(self,Machine):
         self.machine = Machine
-
         self.cmd = None
+        self.fileList = os.listdir("./image/savedImage/")
+        self.fileList.reverse()
+        print self.fileList
+        self.index = 0
 
     def getCommand(self):
         command = self.cmd
         self.setCommand(None)
         return command
 
+    def addIndex(self):
+        
+        self.fileList = os.listdir("./image/savedImage/")
+        self.fileList.reverse()
+        numlist = len(self.fileList)
+        if numlist == 0:
+            return False
+        else:
+            if self.index >= (numlist-1):
+                self.index = 0
+            else:
+                self.index += 1
+
+    def subIndex(self):
+
+        self.fileList = os.listdir("./image/savedImage/")
+        self.fileList.reverse()
+        numlist = len(self.fileList)
+        if numlist == 0:
+            return False
+        else:
+            if self.index <= (numlist-1):
+                self.index = (numlist-1)
+            else:
+                self.index -= 1
+            
+
     def setCommand(self, cmd):
         self.cmd = cmd
 
+    def cvimage_to_pygame(self,image):
+        try:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            cvimg =pygame.image.frombuffer(image.tostring(), image.shape[1::-1],"RGB")
+        except:
+            return False
+        return cvimg
 
-
+    
     def displayFlip(self):
-        #logging.debug("겔러리 화면 재생")
-        for evt in pygame.event.get():
-            if evt.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
-                # if statement
-                if self.machine.drive_rect.collidepoint(pos) & pressed1 == 1:
-                    logging.debug("이베일 버튼 눌러짐")
-                    self.setCommand("email")
-                if self.machine.larr_rect.collidepoint(pos) & pressed1 == 1:
-                    logging.debug("좌 버튼 눌러짐")
-                if self.machine.rarr_rect.collidepoint(pos) & pressed1 == 1:
-                    logging.debug("우 버튼 눌러짐")
-                if self.machine.play_rect.collidepoint(pos) & pressed1 == 1:
-                    logging.debug("실행 버튼 눌러짐")
-                if self.machine.home_rect.collidepoint(pos) & pressed1 == 1:
-                    logging.debug("홈 버튼 눌러짐")
-                    self.setCommand("StreamingState")
+        logging.debug("gallery겔러리 화면 재생")
+        if "mp4" in self.fileList[self.index]:
+            self.cap = cv2.VideoCapture("./image/savedImage/"+str(self.fileList[self.index]))
+            
+            while True:
+                for evt in pygame.event.get():
+                    if evt.type == pygame.MOUSEBUTTONDOWN:
+                        pos = pygame.mouse.get_pos()
+                        (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
+                        # if statement
+                        if self.machine.drive_rect.collidepoint(pos) & pressed1 == 1:
+                            logging.debug("이베일 버튼 눌러짐")
+                            self.setCommand("EmailSendState")
+                            self.cap.release()
+                            return
+                        if self.machine.larr_rect.collidepoint(pos) & pressed1 == 1:
+                            logging.debug("좌 버튼 눌러짐")
+                            self.subIndex()
+                            self.cap.release()
+                            return
+                        if self.machine.rarr_rect.collidepoint(pos) & pressed1 == 1:
+                            logging.debug("우 버튼 눌러짐")
+                            self.addIndex()
+                            self.cap.release()
+                            return
+                        if self.machine.play_rect.collidepoint(pos) & pressed1 == 1:
+                            logging.debug("실행 버튼 눌러짐")
+                            self.cap.release()
+                            return                            
+                        if self.machine.home_rect.collidepoint(pos) & pressed1 == 1:
+                            logging.debug("홈 버튼 눌러짐")
+                            self.setCommand("StreamingState")
+                            self.cap.release()
+                            return
 
-        self.machine.screen.fill((255, 255, 255))
 
-        pygame.font.init()
-        text = "gallery screen"
-        font = pygame.font.Font(None, 50)
-        imgText = font.render(text, True, (255, 0, 0))
-        rect = imgText.get_rect()
-        # rect.center = text_space.center
-        self.machine.screen.blit(imgText, (0,0))
-        self.machine.screen.blit(self.machine.playIcon, self.machine.play_rect)
-        self.machine.screen.blit(self.machine.driveIcon, self.machine.drive_rect)
-        self.machine.screen.blit(self.machine.larrIcon, self.machine.larr_rect)
-        self.machine.screen.blit(self.machine.rarrIcon, self.machine.rarr_rect)
-        self.machine.screen.blit(self.machine.homeIcon, self.machine.home_rect)
-        pygame.display.flip()
+                ret,cvimg = self.cap.read()
+                cvimg = cv2.resize(cvimg,(470,330), interpolation=cv2.INTER_AREA)
+                
+                self.machine.screen.fill((255, 255, 255))
+                
+                #cv2.imshow("test",cvimg)
+                
+                img = self.cvimage_to_pygame(cvimg)
+                img = pygame.transform.scale(img, (480, 340))
+                    
+                self.machine.screen.blit(img,(0,0))
+                self.machine.screen.blit(self.machine.playIcon, self.machine.play_rect)
+                self.machine.screen.blit(self.machine.driveIcon, self.machine.drive_rect)
+                self.machine.screen.blit(self.machine.larrIcon, self.machine.larr_rect)
+                self.machine.screen.blit(self.machine.rarrIcon, self.machine.rarr_rect)
+                self.machine.screen.blit(self.machine.homeIcon, self.machine.home_rect)
+                pygame.display.flip()
+        else:
+            cvimg = cv2.imread("./image/savedImage/"+str(self.fileList[self.index]),cv2.IMREAD_COLOR)
+            self.machine.screen.fill((255, 255, 255))
+            img = self.cvimage_to_pygame(cvimg)
+            img = pygame.transform.scale(img, (480, 340))
+            self.machine.screen.blit(img,(0,0))
+            self.machine.screen.blit(self.machine.playIcon, self.machine.play_rect)
+            self.machine.screen.blit(self.machine.driveIcon, self.machine.drive_rect)
+            self.machine.screen.blit(self.machine.larrIcon, self.machine.larr_rect)
+            self.machine.screen.blit(self.machine.rarrIcon, self.machine.rarr_rect)
+            self.machine.screen.blit(self.machine.homeIcon, self.machine.home_rect)
+            pygame.display.flip()
+            while True:
+                for evt in pygame.event.get():
+                        if evt.type == pygame.MOUSEBUTTONDOWN:
+                            pos = pygame.mouse.get_pos()
+                            (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
+                            # if statement
+                            if self.machine.drive_rect.collidepoint(pos) & pressed1 == 1:
+                                logging.debug("이베일 버튼 눌러짐")
+                            if self.machine.larr_rect.collidepoint(pos) & pressed1 == 1:
+                                logging.debug("좌 버튼 눌러짐")
+                                self.subIndex()
+                                return
+                            if self.machine.rarr_rect.collidepoint(pos) & pressed1 == 1:
+                                logging.debug("우 버튼 눌러짐")
+                                self.addIndex()
+                                return
+                            if self.machine.play_rect.collidepoint(pos) & pressed1 == 1:
+                                logging.debug("실행 버튼 눌러짐")
+                                return                            
+                            if self.machine.home_rect.collidepoint(pos) & pressed1 == 1:
+                                logging.debug("홈 버튼 눌러짐")
+                                self.setCommand("StreamingState")
+                                return
+                            
+        
 
 class ExitState(State):
     def __init__(self,Machine):
