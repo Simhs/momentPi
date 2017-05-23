@@ -9,8 +9,10 @@ from threading import Thread
 from ExternalDevice import Button
 from ExternalDevice import Dial
 from ExternalDevice import HyperLapseCam
+#import ExternalDevice
 
 logging.basicConfig(level=logging.DEBUG)
+
 
 class State:
     def getCommand(self):
@@ -120,6 +122,11 @@ class Machine:
     def getExitState(self):
         return self.exitState
 
+import os
+import time
+import io
+import pygame
+import picamera
 
 class StreamingState(State):
     def __init__(self,Machine):
@@ -137,30 +144,50 @@ class StreamingState(State):
 
 
     def displayFlip(self):
-        #logging.debug("스트리밍 화면 재생")
-        for evt in pygame.event.get():
-            if evt.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
-                # if statement
-                if self.machine.gallery_rect.collidepoint(pos) & pressed1 == 1:
-                    self.setCommand("GalleryState")
-                    logging.debug("겔러리버튼입력")
-            if evt.type == pygame.KEYDOWN:
-                if evt.key == pygame.K_LEFT:
+        with picamera.PiCamera() as camera:
+            camera.resolution = (320, 240)
+            camera.rotation   = 180
+            camera.crop       = (0.0, 0.0, 1.0, 1.0)
+            rgb = bytearray(camera.resolution[0] * camera.resolution[1] * 3)
+            while True:
+                stream = io.BytesIO()
+                camera.capture(stream, use_video_port=True, format='rgb', resize=(320, 240))
+                stream.seek(0)
+                stream.readinto(rgb)
+                stream.close()
+                
+                self.machine.screen.fill((255, 255, 255))
+                
+                img = pygame.image.frombuffer(rgb[0:(320 * 240 * 3)], (320, 240), 'RGB')
+                img = pygame.transform.scale(img,(480,340))
+                self.machine.screen.blit(img, (0,0))
+            
+                self.machine.screen.blit(self.machine.galleryIcon, self.machine.gallery_rect)
+                self.machine.screen.blit(self.machine.aimIcon, self.machine.aim_rect)
+                pygame.display.flip()
+
+                test = int(self.pushButton.isPushed())
+                if test == 1:
+                    print "success"
                     logging.debug("버튼입력")
                     self.setCommand("PrintingState")
+                    return
 
-        self.machine.screen.fill((255, 255, 255))
-        pygame.font.init()
-        text = "streaming screen"
-        font = pygame.font.Font(None, 50)
-        imgText = font.render(text, True, (255, 0, 0))
-        rect = imgText.get_rect()
-        self.machine.screen.blit(imgText, rect)
-        self.machine.screen.blit(self.machine.galleryIcon, self.machine.gallery_rect)
-        self.machine.screen.blit(self.machine.aimIcon, self.machine.aim_rect)
-        pygame.display.flip()
+                #logging.debug("스트리밍 화면 재생")
+                for evt in pygame.event.get():
+                    if evt.type == pygame.MOUSEBUTTONDOWN:
+                        pos = pygame.mouse.get_pos()
+                        (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
+                        # if statement
+                        if self.machine.gallery_rect.collidepoint(pos) & pressed1 == 1:
+                            self.setCommand("GalleryState")
+                            logging.debug("겔러리버튼입력")
+                            return
+                    if evt.type == pygame.KEYDOWN:
+                        if evt.key == pygame.K_LEFT:
+                            logging.debug("버튼입력")
+                            self.setCommand("PrintingState")
+                            return
 
 class PrintingState(State):
     def __init__(self,Machine):
@@ -177,7 +204,7 @@ class PrintingState(State):
         self.cmd = cmd
 
     def printPicture(self):
-        time.sleep(3)
+        os.system("lpr -o fit-to-page /home/pi/Desktop/momentPi/image/savedImage/2017-05-1823:49:18.598287.jpg")
         pass
 
     def checkDialValue(self):
@@ -189,6 +216,9 @@ class PrintingState(State):
         BLUE = (100, 230, 255)
         GRAY = (200, 200, 200)
 
+        self.printPicture()
+
+        
         if self.checkDialValue() >0:
             self.setCommand("RecodingState")
         else:
@@ -206,15 +236,25 @@ class PrintingState(State):
         self.machine.screen.blit(imgText, rect)
         pygame.display.flip()
 
-        self.printPicture()
 
+        
+import time
+import cv2
+import picamera
 
 class RecodingState(State):
     def __init__(self,Machine):
         self.machine = Machine
-        self.dialValue = None
+        self.dialValue = Dial()
         self.cmd = None
-        self.camera = HyperLapseCam()
+        self.rgb = None
+        
+        self.finish = False
+
+        self.gotoState = False
+
+        self.picam = None
+        #self.camera = HyperLapseCam(100)
 
 
     def getCommand(self):
@@ -226,31 +266,143 @@ class RecodingState(State):
         self.cmd = cmd
 
     def saveImg(self):
-        self.camera.startCapture(2,2)
+        pass
+        #self.camera.startCapture(2,2)
 
+    def getDialValue(self):
+        value = self.dialValue.getValue()
+        return value
+    
+    def capture(self,totaltime):
+        
+        timer = totaltime*60.0/750.0
+        #print timer
+        for i in range(750):
+            if self.finish == True:
+                return
+            self.picam.capture('./image/tempImage/image'+str(i)+'.jpg')
+            time.sleep(timer)
+        self.finish = True
+        return
+    
+            
+    
+
+    def cvimage_to_pygame(self,image):
+        try:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            cvimg =pygame.image.frombuffer(image.tostring(), image.shape[1::-1],"RGB")
+        except:
+            return False
+        return cvimg
+    
+        
+    def preview(self):
+        
+        
+        while not self.finish:
+            for evt in pygame.event.get():
+                if evt.type == pygame.MOUSEBUTTONDOWN:
+                    pos = pygame.mouse.get_pos()
+                    (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
+                    # if statement
+                    if self.machine.home_rect.collidepoint(pos) & pressed1 == 1:
+                        logging.debug("홈 버튼 눌러짐")
+                        self.finish = True
+                        self.gotoState = True
+                        return
+            
+            
+            stream = io.BytesIO()
+            self.picam.capture(stream, use_video_port=True, format='rgb', resize=(320, 240))
+            stream.seek(0)
+            stream.readinto(self.rgb)
+            stream.close()
+                
+            self.machine.screen.fill((255, 255, 255))
+            img = pygame.image.frombuffer(self.rgb[0:(320 * 240 * 3)], (320, 240), 'RGB')
+            img = pygame.transform.scale(img,(480,340))
+            self.machine.screen.blit(img, (0,0))
+            self.machine.screen.blit(self.machine.homeIcon, self.machine.home_rect)
+            pygame.display.flip()
+
+            
+                
+    '''            
+    def preview(self):
+        while not self.finish:
+            
+            for evt in pygame.event.get():
+                if evt.type == pygame.MOUSEBUTTONDOWN:
+                    pos = pygame.mouse.get_pos()
+                    (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
+                    # if statement
+                    if self.machine.home_rect.collidepoint(pos) & pressed1 == 1:
+                        logging.debug("홈 버튼 눌러짐")
+                        self.finish = True
+                        self.gotoState = True
+                        return
+            dirlist = os.listdir("./image/tempImage/")
+            #print dirlist
+            
+            if len(dirlist) < 2:
+                continue
+            else:
+                try:
+                    cvimg = cv2.imread("./image/tempImage/"+str(dirlist[1]))
+                    cvimg = cv2.resize(cvimg,(480,340), interpolation=cv2.INTER_AREA)
+                except:
+                    continue
+                self.machine.screen.fill((255, 255, 255))
+                    
+                #cv2.imshow("test",cvimg)
+                
+                img = self.cvimage_to_pygame(cvimg)
+                #img = pygame.transform.scale(img, (480, 340))
+                    
+                self.machine.screen.fill((255, 255, 255))
+                pygame.draw.rect(self.machine.screen, (200, 200, 200), [0, 0, 50, 50])
+                pygame.font.init()
+                text = "REC"
+                font = pygame.font.Font(None, 50)
+                imgText = font.render(text, True, (255, 0, 0))
+                rect = imgText.get_rect()
+                
+                self.machine.screen.blit(img,(0,0))
+                self.machine.screen.blit(imgText, rect)
+                self.machine.screen.blit(self.machine.homeIcon, self.machine.home_rect)
+                pygame.display.flip()
+        '''
+        
+    
     def displayFlip(self):
         logging.debug("녹화중")
-        for evt in pygame.event.get():
-            if evt.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
-                # if statement
-                if self.machine.home_rect.collidepoint(pos) & pressed1 == 1:
-                    logging.debug("홈 버튼 눌러짐")
-                    self.setCommand("StreamingState")
-        self.machine.screen.fill((255, 255, 255))
-        pygame.draw.rect(self.machine.screen, (200, 200, 200), [0, 0, 50, 50])
-        pygame.font.init()
-        text = "recoding screen"
-        font = pygame.font.Font(None, 50)
-        imgText = font.render(text, True, (255, 0, 0))
-        rect = imgText.get_rect()
-        self.machine.screen.blit(imgText, rect)
-        self.machine.screen.blit(self.machine.homeIcon, self.machine.home_rect)
-        pygame.display.flip()
-        self.saveImg()
-        self.setCommand("LoadingState")
-        
+        os.system("sudo rm -rf /home/pi/Desktop/momentPi/image/tempImage/*")
+        with picamera.PiCamera() as self.picam:
+            # self.picam.resolution = (1920, 1080)
+            self.picam.rotation   = 180
+            self.picam.crop       = (0.0, 0.0, 1.0, 1.0)
+            self.rgb = bytearray(self.picam.resolution[0] * self.picam.resolution[1] * 3)
+            # self.picam = picamera.PiCamera()
+            self.picam.resolution = (1920, 1080) #okay
+            dialValue= self.getDialValue()
+            self.thread1 = Thread(target=self.capture,args=(dialValue,getDialValue()))
+            self.thread2 = Thread(target=self.preview,args=())
+            self.thread1.start()
+            self.thread2.start()
+
+            self.thread1.join()
+            self.thread2.join()
+
+            if not self.gotoState:
+                self.setCommand("LoadingState")
+            else:
+                self.setCommand("StreamingState")
+                
+            self.finish = False
+            self.gotoState = False 
+
+import datetime
 class LoadingState(State):
     def __init__(self,Machine):
         self.machine = Machine
@@ -267,11 +419,9 @@ class LoadingState(State):
         self.cmd = cmd
 
     def convertToMP4(self):
-        time.sleep(20)
+        os.system("ffmpeg -y -f image2 -i ./image/tempImage/image%d.jpg -preset fast ./image/savedImage/"+str(datetime.datetime.now()).replace(" ","-")+".mp4")
         self.convertOver = True
 
-    def sendEmail(self):
-        pass
 
     def animation(self):
         angle = -20
@@ -425,6 +575,7 @@ class GalleryState(State):
     def setCommand(self, cmd):
         self.cmd = cmd
 
+
     def cvimage_to_pygame(self,image):
         try:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -432,7 +583,6 @@ class GalleryState(State):
         except:
             return False
         return cvimg
-
     
     def displayFlip(self):
         logging.debug("gallery겔러리 화면 재생")
@@ -472,7 +622,7 @@ class GalleryState(State):
 
 
                 ret,cvimg = self.cap.read()
-                cvimg = cv2.resize(cvimg,(470,330), interpolation=cv2.INTER_AREA)
+                cvimg = cv2.resize(cvimg,(480,340), interpolation=cv2.INTER_AREA)
                 
                 self.machine.screen.fill((255, 255, 255))
                 
