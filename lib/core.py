@@ -132,7 +132,7 @@ class StreamingState(State):
     def __init__(self,Machine):
         self.machine = Machine
         self.cmd = None
-        self.pushButton = Button()
+        self.button = None
 
     def getCommand(self):
         command = self.cmd
@@ -142,14 +142,19 @@ class StreamingState(State):
     def setCommand(self,cmd):
         self.cmd = cmd
 
-
     def displayFlip(self):
+        self.button = Button()
+        self.button.start()
+        logging.debug("1")
+        
         with picamera.PiCamera() as camera:
+            logging.debug("2")
             camera.resolution = (320, 240)
-            camera.rotation   = 180
+            camera.rotation   = 0
             camera.crop       = (0.0, 0.0, 1.0, 1.0)
             rgb = bytearray(camera.resolution[0] * camera.resolution[1] * 3)
             while True:
+                logging.debug("3")
                 stream = io.BytesIO()
                 camera.capture(stream, use_video_port=True, format='rgb', resize=(320, 240))
                 stream.seek(0)
@@ -166,12 +171,11 @@ class StreamingState(State):
                 self.machine.screen.blit(self.machine.aimIcon, self.machine.aim_rect)
                 pygame.display.flip()
 
-                test = int(self.pushButton.isPushed())
-                if test == 1:
-                    print "success"
+                
+                if self.button.getButtonValue() == 1:
                     logging.debug("버튼입력")
                     self.setCommand("PrintingState")
-                    return
+                    break
 
                 #logging.debug("스트리밍 화면 재생")
                 for evt in pygame.event.get():
@@ -182,19 +186,20 @@ class StreamingState(State):
                         if self.machine.gallery_rect.collidepoint(pos) & pressed1 == 1:
                             self.setCommand("GalleryState")
                             logging.debug("겔러리버튼입력")
-                            return
+                            break
                     if evt.type == pygame.KEYDOWN:
                         if evt.key == pygame.K_LEFT:
                             logging.debug("버튼입력")
                             self.setCommand("PrintingState")
-                            return
-
+                            break
+        
+        self.button.close()
+        
 class PrintingState(State):
     def __init__(self,Machine):
         self.machine = Machine
         self.cmd = None
-        self.dial = Dial()
-
+        
     def getCommand(self):
         command = self.cmd
         self.setCommand(None)
@@ -207,25 +212,12 @@ class PrintingState(State):
         os.system("lpr -o fit-to-page /home/pi/Desktop/momentPi/image/savedImage/2017-05-1823:49:18.598287.jpg")
         pass
 
-    def checkDialValue(self):
-        value = self.dial.getValue()
-        return value
+    
 
     def displayFlip(self):
-        logging.debug("사진 출력 화면 재생")
-        BLUE = (100, 230, 255)
-        GRAY = (200, 200, 200)
-
-        self.printPicture()
-
-        
-        if self.checkDialValue() >0:
-            self.setCommand("RecodingState")
-        else:
-            self.setCommand("StreamingState")
-
+        dial = Dial()
         self.machine.screen.fill((255, 255, 255))
-        pygame.draw.rect(self.machine.screen, GRAY, [0, 0, 50, 50])
+        pygame.draw.rect(self.machine.screen, (200, 200, 200), [0, 0, 50, 50])
 
         pygame.font.init()
         text = "printing... screen"
@@ -235,6 +227,20 @@ class PrintingState(State):
         # rect.center = text_space.center
         self.machine.screen.blit(imgText, rect)
         pygame.display.flip()
+        
+        if dial.getValue() >0:
+            self.setCommand("RecodingState")
+                
+            
+        else:
+            self.setCommand("StreamingState")
+                
+            
+
+            
+            
+        time.sleep(2)
+        dial.close()
 
 
         
@@ -245,7 +251,7 @@ import picamera
 class RecodingState(State):
     def __init__(self,Machine):
         self.machine = Machine
-        self.dialValue = Dial()
+        #self.dialValue = Dial()
         self.cmd = None
         self.rgb = None
         
@@ -270,8 +276,9 @@ class RecodingState(State):
         #self.camera.startCapture(2,2)
 
     def getDialValue(self):
-        value = self.dialValue.getValue()
-        return value
+        #value = self.dialValue.getValue()
+        #return value
+        pass
     
     def capture(self,totaltime):
         
