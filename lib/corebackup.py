@@ -133,7 +133,7 @@ class StreamingState(State):
         self.machine = Machine
         self.cmd = None
         self.pushButton = Button()
-
+        
     def getCommand(self):
         command = self.cmd
         self.setCommand(None)
@@ -143,64 +143,77 @@ class StreamingState(State):
         self.cmd = cmd
 
     def checkButton(self):
-        test = int(self.pushButton.isPushed())
+        test = int(self.pushButton.getButtonValue())
         if test == 1:
             print "input success"
             logging.debug("버튼입력")
             self.setCommand("PrintingState")
             return
+        else:
+            print "value = 1"
+
+    def streaming(self):
+        with picamera.PiCamera() as camera:
+                camera.resolution = (320, 240)
+                camera.rotation   = 180
+                camera.crop       = (0.0, 0.0, 1.0, 1.0)
+                rgb = bytearray(camera.resolution[0] * camera.resolution[1] * 3)
+
+                while True:
+                    stream = io.BytesIO()
+                    camera.capture(stream, use_video_port=True, format='rgb', resize=(320, 240))
+                    stream.seek(0)
+                    stream.readinto(rgb)
+                    stream.close()
+                    
+                    self.machine.screen.fill((255, 255, 255))
+                    
+                    img = pygame.image.frombuffer(rgb[0:(320 * 240 * 3)], (320, 240), 'RGB')
+                    img = pygame.transform.scale(img,(480,340))
+                    self.machine.screen.blit(img, (0,0))
+                    
+                    self.machine.screen.blit(self.machine.galleryIcon, self.machine.gallery_rect)
+                    self.machine.screen.blit(self.machine.aimIcon, self.machine.aim_rect)
+                    pygame.display.flip()
+
+                    #Help thread
+
+                    #test = int(self.pushButton.isPushed())
+                    #if test == 1:
+                    #    print "success"
+                    #    logging.debug("버튼입력")
+                    #    self.setCommand("PrintingState")
+                    #    return
+
+                    #self.thread = Thread(target=self.checkButton,args=())
+                    #self.thread.start()
+                    #self.thread.join()
+                    #logging.debug("스트리밍 화면 재생")
+                    #for evt in pygame.event.get():
+                    #    if evt.type == pygame.MOUSEBUTTONDOWN:
+                    #        pos = pygame.mouse.get_pos()
+                    #        (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
+                    #        # if statement
+                    #        if self.machine.gallery_rect.collidepoint(pos) & pressed1 == 1:
+                    #            self.setCommand("GalleryState")
+                    #            logging.debug("겔러리버튼입력")
+                    #            return
+                    #    if evt.type == pygame.KEYDOWN:
+                    #        if evt.key == pygame.K_LEFT:
+                    #            logging.debug("버튼입력")
+                    #            self.setCommand("PrintingState")
+                    #            return
 
     def displayFlip(self):
-        with picamera.PiCamera() as camera:
-            camera.resolution = (320, 240)
-            camera.rotation   = 180
-            camera.crop       = (0.0, 0.0, 1.0, 1.0)
-            rgb = bytearray(camera.resolution[0] * camera.resolution[1] * 3)
-            while True:
-                stream = io.BytesIO()
-                camera.capture(stream, use_video_port=True, format='rgb', resize=(320, 240))
-                stream.seek(0)
-                stream.readinto(rgb)
-                stream.close()
-                
-                self.machine.screen.fill((255, 255, 255))
-                
-                img = pygame.image.frombuffer(rgb[0:(320 * 240 * 3)], (320, 240), 'RGB')
-                img = pygame.transform.scale(img,(480,340))
-                self.machine.screen.blit(img, (0,0))
-            
-                self.machine.screen.blit(self.machine.galleryIcon, self.machine.gallery_rect)
-                self.machine.screen.blit(self.machine.aimIcon, self.machine.aim_rect)
-                pygame.display.flip()
-
-                #Help thread
-                #test = int(self.pushButton.isPushed())
-                #if test == 1:
-                #    print "success"
-                #    logging.debug("버튼입력")
-                #    self.setCommand("PrintingState")
-                #    return
-
-                #self.thread = Thread(target=self.checkButton,args=())
-                #self.thread.start()
-                #self.thread.join()
-                #logging.debug("스트리밍 화면 재생")
-                for evt in pygame.event.get():
-                    if evt.type == pygame.MOUSEBUTTONDOWN:
-                        pos = pygame.mouse.get_pos()
-                        (pressed1, pressed2, pressed3) = pygame.mouse.get_pressed()
-                        # if statement
-                        if self.machine.gallery_rect.collidepoint(pos) & pressed1 == 1:
-                            self.setCommand("GalleryState")
-                            logging.debug("겔러리버튼입력")
-                            return
-                    if evt.type == pygame.KEYDOWN:
-                        if evt.key == pygame.K_LEFT:
-                            logging.debug("버튼입력")
-                            self.setCommand("PrintingState")
-                            return
-
-
+        while True:
+            self.streamThread = Thread(target=self.streaming,args=())
+            self.readyInput = Thread(target=self.checkButton,args=())
+            self.streamThread.start()
+            self.readyInput.start()
+            self.streamThread.join()
+            self.readyInput.join()
+    
+    
 class PrintingState(State):
     def __init__(self,Machine):
         self.machine = Machine
@@ -236,7 +249,7 @@ class PrintingState(State):
         self.printPicture()
 
         
-        if self.checkDialValue() >0:
+        if self.checkDialValue() > 0:
             self.setCommand("RecodingState")
         else:
             self.setCommand("StreamingState")
@@ -316,8 +329,7 @@ class RecodingState(State):
         return cvimg
     
         
-    def preview(self):
-        
+    def preview(self):        
         
         while not self.finish:
             for evt in pygame.event.get():
@@ -483,10 +495,8 @@ class LoadingState(State):
         self.thread.join()
         self.convertOver = False
 
-#from __future__ import print_function
 import httplib2
 import os
-#import pprint
 from apiclient import discovery
 import apiclient.http
 import datetime
@@ -500,36 +510,15 @@ class EmailSendState(State):
         self.barValue = None
         self.cmd = None
         self.convertOver = False
-        self.SCOPES = "https://www.googleapis.com/auth/drive"
-        self.CLIENT_SECRET_FILE = "/home/pi/Desktop/momentPi/lib/client_secret.json"
-        self.APPLICATION_NAME = 'Drive API Python Quickstart'
+
+
+        
+
+        
 
 		
-        self.MIMETYPE = 'video/mp4'
-        self.TITLE = str(datetime.datetime.now())
-        self.DESCRIPTION = 'A shiny new text document about hello world.'
-        self.flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
-
-    def get_credentials(self):
-		
-        home_dir = os.path.expanduser('~')
-        credential_dir = os.path.join(home_dir, '.credentials')
-        if not os.path.exists(credential_dir):
-            os.makedirs(credential_dir)
-        credential_path = os.path.join(credential_dir,'drive-python-quickstart.json')
-
-        store = Storage(credential_path)
-        credentials = store.get()
-        if not credentials or credentials.invalid:
-            flow = client.flow_from_clientsecrets(self.CLIENT_SECRET_FILE, self.SCOPES)
-            flow.user_agent = self.APPLICATION_NAME
-            if self.flags:
-                credentials = tools.run_flow(flow, store, self.flags)
-            else: # Needed only for compatibility with Python 2.6
-                credentials = tools.run(flow, store)
-                print('Storing credentials to ' + credential_path)
-        return credentials
-
+        
+                
     def getCommand(self):
         command = self.cmd
         self.setCommand(None)
@@ -542,12 +531,44 @@ class EmailSendState(State):
         time.sleep(20)
         self.convertOver = True
 
-    def sendEmail(self, FILENAME):
-        credentials = self.get_credentials()
+    def sendEmail(self, FILENAME,mimetype="mp4"):
+        SCOPES = "https://www.googleapis.com/auth/drive"
+        CLIENT_SECRET_FILE = "/home/pi/Desktop/momentPi/lib/client_secret.json"
+        APPLICATION_NAME = 'Drive API Python Quickstart'
+
+        if mimetype == "mp4":
+            MIMETYPE = 'video/mp4'
+        else:
+            MIMETYPE = 'image/jpeg'
+        
+        
+        TITLE = str(datetime.datetime.now())
+        DESCRIPTION = 'A shiny new text document about hello world.'
+        flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
+
+        credentials = None
+        
+        home_dir = os.path.expanduser('~')
+        credential_dir = os.path.join(home_dir, '.credentials')
+        if not os.path.exists(credential_dir):
+            os.makedirs(credential_dir)
+        credential_path = os.path.join(credential_dir,'drive-python-quickstart.json')
+
+        store = Storage(credential_path)
+        credentials = store.get()
+        if not credentials or credentials.invalid:
+            flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
+            flow.user_agent = APPLICATION_NAME
+            if flags:
+                credentials = tools.run_flow(flow, store, flags)
+            else: # Needed only for compatibility with Python 2.6
+                credentials = tools.run(flow, store)
+                print('Storing credentials to ' + credential_path)
+        
         http = credentials.authorize(httplib2.Http())
         drive_service = apiclient.discovery.build('drive', 'v2', http=http)
-        media_body = apiclient.http.MediaFileUpload(FILENAME,mimetype=self.MIMETYPE,resumable=True)
-        body = {'title': self.TITLE,'description': self.DESCRIPTION,}
+        media_body = apiclient.http.MediaFileUpload(FILENAME,mimetype=MIMETYPE,resumable=True)
+        body = {'title': TITLE,'description': DESCRIPTION,}
 
 
         new_file = drive_service.files().insert(body=body, media_body=media_body).execute()
@@ -587,7 +608,7 @@ class EmailSendState(State):
 
 
     def displayFlip(self):
-        self.sendEmail("./image/savedImage/2017-05-23-13:37:44.701839.mp4")
+        self.sendEmail("2017-05-23-13:37:44.701839.mp4")
         self.setCommand("StreamingState")
         self.thread = Thread(target=self.animation, )
         self.thread.start()

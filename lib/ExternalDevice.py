@@ -4,6 +4,8 @@ import picamera
 import RPi.GPIO as GPIO
 import sys
 import os
+from threading import Thread
+import logging
 
 class Button:    
     def __init__(self):
@@ -11,27 +13,22 @@ class Button:
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(19, GPIO.OUT)
         GPIO.output(19, True)
-
-    def isPushed(self):
-        print "test success"
-        switch = 13
+        self.button_pin = 13
         GPIO.setup(13,GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-        try:
-            while True:
-                if GPIO.input(switch) == 0:
-                    while True:
-                        if GPIO.input(switch) == 1:
-                            self.button_state = 1
-                            time.sleep(0.2)
-                            print self.button_state
-                            break
-                break
+        GPIO.add_event_detect(13, GPIO.RISING, callback=self.handler)
+        
+    def handler(self, n):
+        self.button_state = 1
 
-        finally:
-            print 'end'
-
+    def start(self):
+        self.button_state = 0
+        
+    def close(self):
+        GPIO.cleanup()
+        pass
+        
+    def getButtonValue(self):
         return self.button_state
-
 
 class Dial:
     def __init__(self):
@@ -44,17 +41,19 @@ class Dial:
         self.POWER = 26
 
         # set up the SPI interface pins
+        
         GPIO.setup(self.POWER, GPIO.OUT)
         GPIO.setup(self.SPIMOSI, GPIO.OUT)
         GPIO.setup(self.SPIMISO, GPIO.IN)
         GPIO.setup(self.SPICLK, GPIO.OUT)
         GPIO.setup(self.SPICS, GPIO.OUT)
         GPIO.output(self.POWER, True)
-
+        
         # 10k trim pot connected to adc #0
         self.potentiometer_adc = 0;
         
     def readadc(self, adcnum, clockpin, mosipin, misopin, cspin):
+        
         if ((adcnum > 7) or (adcnum < 0)):
             return -1
         GPIO.output(cspin, True)
@@ -88,6 +87,10 @@ class Dial:
                 
         return adcout
 
+    def close(self):
+        GPIO.cleanup()
+        pass
+
     def getValue(self):
         trim_pot = self.readadc(self.potentiometer_adc, self.SPICLK, self.SPIMOSI, self.SPIMISO, self.SPICS)
         if(trim_pot != 0):
@@ -95,6 +98,7 @@ class Dial:
         else:
             set_vel = 0
         return set_vel
+
 
 
 class HyperLapseCam:
